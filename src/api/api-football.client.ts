@@ -247,7 +247,9 @@ export class APIFootballClient {
       logger.debug('Fetching standings', { leagueId, competitionCode, season });
 
       // football-data.org uses competition codes in the URL
-      const response = await this.client.get<StandingsResponse>(`/competitions/${competitionCode}/standings`);
+      const response = await this.client.get<StandingsResponse>(
+        `/competitions/${competitionCode}/standings`
+      );
 
       cacheService.set(cacheKey, response.data, CACHE_TTL.STANDINGS);
       return response.data;
