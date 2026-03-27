@@ -137,9 +137,9 @@ export class MatchService {
     return match?.status === MatchStatus.FINISHED;
   }
 
-  async getFinishedAndLiveMatches(limit: number = 20): Promise<MatchWithLeague[]> {
+  async getFinishedAndLiveMatches(): Promise<MatchWithLeague[]> {
     try {
-      const cacheKey = `matches:finished-live:${limit}`;
+      const cacheKey = `matches:finished-live:all`;
       const cached = cacheService.get<MatchWithLeague[]>(cacheKey);
 
       if (cached) {
@@ -147,7 +147,7 @@ export class MatchService {
         return cached;
       }
 
-      const matches = await matchRepository.findFinishedAndLive(limit);
+      const matches = await matchRepository.findFinishedAndLive();
       logger.debug(`Retrieved ${matches.length} finished and live matches`);
 
       // Use shorter TTL if there are live matches

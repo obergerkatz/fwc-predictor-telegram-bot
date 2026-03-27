@@ -12,23 +12,16 @@ const CACHE_TTL = {
   GROUPS: 24 * 60 * 60, // 24 hours
 };
 
-// Fallback groups data for FIFA Club World Cup 2025 (when API doesn't provide data)
-const FALLBACK_GROUPS: Record<string, string[]> = {
-  A: ['Palmeiras', 'Porto', 'Al-Ahly', 'Inter Miami'],
-  B: ['Paris Saint-Germain', 'Atletico Madrid', 'Botafogo', 'Seattle Sounders'],
-  C: ['Bayern Munich', 'Auckland City', 'Boca Juniors', 'Benfica'],
-  D: ['Flamengo', 'Esperance', 'Chelsea', 'Leon'],
-  E: ['River Plate', 'Urawa', 'Monterrey', 'Inter Milan'],
-  F: ['Fluminense', 'Borussia Dortmund', 'Ulsan', 'Mamelodi Sundowns'],
-  G: ['Manchester City', 'Wydad', 'Al-Ain', 'Juventus'],
-  H: ['Real Madrid', 'Al-Hilal', 'Pachuca', 'Salzburg'],
-  I: ['Barcelona', 'Tigres', 'Al-Ahly Cairo', 'Real Sociedad'],
-  J: ['Atletico Mineiro', 'Seattle Sounders FC', 'PSV Eindhoven', 'Manchester United'],
-  K: ['Borussia Monchengladbach', 'Olimpia', 'FC Porto', 'Club Leon'],
-  L: ['Nacional', 'Al-Ittihad', 'Olympiacos', 'Bayer Leverkusen'],
-};
-
 export class GroupStagePredictionService {
+  private async getActiveLeagueId(): Promise<number | null> {
+    const activeLeagues = await leagueRepository.findActiveByConfiguredLeagues();
+    if (activeLeagues.length === 0) {
+      logger.warn('No active leagues found matching DEFAULT_LEAGUE_IDS');
+      return null;
+    }
+    return activeLeagues[0].id;
+  }
+
   async getGroups(): Promise<Record<string, string[]>> {
     try {
       const cacheKey = 'groups:data';
@@ -40,9 +33,9 @@ export class GroupStagePredictionService {
       }
 
       // Fetch from API
-      const activeLeagues = await leagueRepository.findActive();
+      const activeLeagues = await leagueRepository.findActiveByConfiguredLeagues();
       if (activeLeagues.length === 0) {
-        logger.warn('No active leagues found');
+        logger.warn('No active leagues found matching DEFAULT_LEAGUE_IDS');
         return {};
       }
 
@@ -134,13 +127,13 @@ export class GroupStagePredictionService {
         logger.warn('Failed to fetch teams', { error });
       }
 
-      // If all methods failed, use fallback data
+      // If all methods failed, return empty groups
       if (Object.keys(groups).length === 0) {
-        logger.warn('All API methods failed, using fallback groups data');
-        cacheService.set(cacheKey, FALLBACK_GROUPS, CACHE_TTL.GROUPS);
-        return FALLBACK_GROUPS;
+        logger.warn('All API methods failed, no groups data available');
+        return {};
       }
 
+      cacheService.set(cacheKey, groups, CACHE_TTL.GROUPS);
       return groups;
     } catch (error) {
       logger.error('Failed to fetch groups from API', { error });
@@ -159,8 +152,14 @@ export class GroupStagePredictionService {
 
   async canPlacePrediction(): Promise<{ allowed: boolean; reason?: string }> {
     try {
-      // Check if any match has started
-      const firstMatch = await matchRepository.getFirstMatch();
+      // Get active league
+      const leagueId = await this.getActiveLeagueId();
+      if (!leagueId) {
+        return { allowed: false, reason: 'No active league found' };
+      }
+
+      // Check if any match in the active league has started
+      const firstMatch = await matchRepository.getFirstMatchByLeague(leagueId);
 
       if (!firstMatch) {
         return { allowed: true };
@@ -185,7 +184,9 @@ export class GroupStagePredictionService {
 
   async getUserPrediction(userId: number): Promise<GroupStagePrediction | null> {
     try {
-      return await groupStagePredictionRepository.findByUserId(userId);
+      const leagueId = await this.getActiveLeagueId();
+      if (!leagueId) return null;
+      return await groupStagePredictionRepository.findByUserId(userId, leagueId);
     } catch (error) {
       logger.error('Error fetching user group stage prediction', { error, userId });
       throw error;
@@ -201,6 +202,12 @@ export class GroupStagePredictionService {
       const canPlace = await this.canPlacePrediction();
       if (!canPlace.allowed) {
         return { success: false, error: canPlace.reason };
+      }
+
+      // Get active league
+      const leagueId = await this.getActiveLeagueId();
+      if (!leagueId) {
+        return { success: false, error: 'No active league found' };
       }
 
       // Fetch groups for validation
@@ -232,10 +239,11 @@ export class GroupStagePredictionService {
         }
       }
 
-      await groupStagePredictionRepository.create(userId, predictions);
+      await groupStagePredictionRepository.create(userId, leagueId, predictions);
 
       logger.info('Group stage prediction placed', {
         userId,
+        leagueId,
         groupCount: Object.keys(predictions).length,
       });
       return { success: true };
@@ -247,10 +255,11 @@ export class GroupStagePredictionService {
 
   async scorePrediction(
     userId: number,
+    leagueId: number,
     actualQualifiers: Record<string, string[]>
   ): Promise<number> {
     try {
-      const prediction = await this.getUserPrediction(userId);
+      const prediction = await groupStagePredictionRepository.findByUserId(userId, leagueId);
       if (!prediction || prediction.is_scored) {
         return 0;
       }
@@ -270,12 +279,12 @@ export class GroupStagePredictionService {
         }
       }
 
-      await groupStagePredictionRepository.updateBonusPoints(userId, points);
+      await groupStagePredictionRepository.updateBonusPoints(userId, leagueId, points);
 
-      logger.info('Group stage prediction scored', { userId, points });
+      logger.info('Group stage prediction scored', { userId, leagueId, points });
       return points;
     } catch (error) {
-      logger.error('Error scoring group stage prediction', { error, userId });
+      logger.error('Error scoring group stage prediction', { error, userId, leagueId });
       throw error;
     }
   }

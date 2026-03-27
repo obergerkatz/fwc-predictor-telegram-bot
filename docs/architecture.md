@@ -109,4 +109,4 @@ Business logic for:
 - **Rate Limiting**: 10 calls per minute (free tier)
 - **Caching**: In-memory TTL cache reduces API calls
 - **Data Fetched**: Fixtures, live scores, group standings, team information
-- **Competition Code**: WC (World Cup)
+- **Configurable Leagues**: Supports multiple leagues via DEFAULT_LEAGUE_IDS

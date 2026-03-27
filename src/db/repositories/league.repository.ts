@@ -1,5 +1,6 @@
 import { db } from '../database';
 import { League } from '../../types';
+import { config } from '../../utils/config';
 
 export class LeagueRepository {
   async upsert(
@@ -27,6 +28,18 @@ export class LeagueRepository {
   async findActive(): Promise<League[]> {
     const result = await db.query<League>(
       'SELECT * FROM leagues WHERE is_active = true ORDER BY name ASC'
+    );
+    return result.rows;
+  }
+
+  async findActiveByConfiguredLeagues(): Promise<League[]> {
+    const leagueCodes = config.leagues.defaultLeagueIds;
+    const result = await db.query<League>(
+      `SELECT * FROM leagues
+       WHERE is_active = true
+       AND code = ANY($1::text[])
+       ORDER BY name ASC`,
+      [leagueCodes]
     );
     return result.rows;
   }

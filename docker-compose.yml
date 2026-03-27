@@ -1,9 +1,9 @@
 services:
   postgres:
     image: postgres:18-alpine
-    container_name: fwc-predictor-db
+    container_name: football-predictor-db
     environment:
-      POSTGRES_DB: ${DB_NAME:-fwc_predictor}
+      POSTGRES_DB: ${DB_NAME:-football_predictor}
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
     ports:
@@ -18,7 +18,7 @@ services:
 
   app:
     build: .
-    container_name: fwc-predictor-bot
+    container_name: football-predictor-bot
     depends_on:
       postgres:
         condition: service_healthy
@@ -33,7 +33,7 @@ services:
       # Database
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-fwc_predictor}
+      DB_NAME: ${DB_NAME:-football_predictor}
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-postgres}
 

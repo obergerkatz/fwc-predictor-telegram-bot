@@ -62,7 +62,7 @@ describe('Flags Utility', () => {
       expect(result).toBe(teamName); // No flag found, returns as-is
     });
 
-    it('should format all World Cup qualified teams correctly', () => {
+    it('should format all qualified teams correctly', () => {
       const sampleTeams = [
         'Argentina',
         'Brazil',

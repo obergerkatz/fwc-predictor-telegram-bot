@@ -124,6 +124,7 @@ export interface UserStats {
 export interface TournamentPrediction {
   id: number;
   user_id: number;
+  league_id: number;
   first_place: string;
   second_place: string;
   third_place: string;
@@ -136,6 +137,7 @@ export interface TournamentPrediction {
 export interface GroupStagePrediction {
   id: number;
   user_id: number;
+  league_id: number;
   predictions: Record<string, string[]>; // { "A": ["Team1", "Team2"], "B": [...], ... }
   bonus_points: number;
   is_scored: boolean;

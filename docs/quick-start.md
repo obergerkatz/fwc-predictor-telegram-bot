@@ -6,7 +6,7 @@
 
 ```bash
 git clone <repository-url>
-cd fwc-predictor-telegram-bot
+cd football-predictor-bot
 ```
 
 ### 2. Configure environment variables
@@ -39,7 +39,7 @@ docker-compose logs -f app
 
 The bot will automatically:
 1. Run database migrations
-2. Sync World Cup fixtures and groups on startup
+2. Sync football fixtures and groups on startup
 3. Start scheduled background jobs
 4. Connect to Telegram
 

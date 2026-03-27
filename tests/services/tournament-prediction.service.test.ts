@@ -1,5 +1,9 @@
 import { TournamentPredictionService } from '../../src/services/tournament-prediction.service';
-import { tournamentPredictionRepository, matchRepository } from '../../src/db/repositories';
+import {
+  tournamentPredictionRepository,
+  matchRepository,
+  leagueRepository,
+} from '../../src/db/repositories';
 
 jest.mock('../../src/db/repositories', () => ({
   tournamentPredictionRepository: {
@@ -8,9 +12,15 @@ jest.mock('../../src/db/repositories', () => ({
     update: jest.fn(),
     updateBonusPoints: jest.fn(),
     getAll: jest.fn(),
+    getAllByLeague: jest.fn(),
   },
   matchRepository: {
     getFirstMatch: jest.fn(),
+    getFirstMatchByLeague: jest.fn(),
+    getAllTeams: jest.fn(),
+  },
+  leagueRepository: {
+    findActiveByConfiguredLeagues: jest.fn(),
   },
 }));
 
@@ -23,40 +33,62 @@ describe('TournamentPredictionService', () => {
   });
 
   describe('getAvailableTeams', () => {
-    it('should return list of World Cup teams', () => {
-      const teams = service.getAvailableTeams();
+    it('should return teams from database', async () => {
+      const mockTeams = ['Argentina', 'Brazil', 'France', 'Germany'];
+      (matchRepository.getAllTeams as jest.Mock).mockResolvedValue(mockTeams);
+
+      const teams = await service.getAvailableTeams();
 
       expect(Array.isArray(teams)).toBe(true);
-      expect(teams.length).toBeGreaterThan(0);
+      expect(teams.length).toBe(4);
       expect(teams).toContain('Argentina');
       expect(teams).toContain('Brazil');
       expect(teams).toContain('France');
       expect(teams).toContain('Germany');
+      expect(matchRepository.getAllTeams).toHaveBeenCalled();
     });
 
-    it('should return sorted team list', () => {
-      const teams = service.getAvailableTeams();
+    it('should return sorted team list from database', async () => {
+      const mockTeams = ['Argentina', 'Brazil', 'France', 'Germany'];
+      (matchRepository.getAllTeams as jest.Mock).mockResolvedValue(mockTeams);
+
+      const teams = await service.getAvailableTeams();
       const sortedTeams = [...teams].sort();
 
       expect(teams).toEqual(sortedTeams);
     });
 
-    it('should have no duplicate teams', () => {
-      const teams = service.getAvailableTeams();
-      const uniqueTeams = new Set(teams);
+    it('should return empty array if database query fails', async () => {
+      (matchRepository.getAllTeams as jest.Mock).mockRejectedValue(new Error('DB Error'));
 
-      expect(teams.length).toBe(uniqueTeams.size);
+      const teams = await service.getAvailableTeams();
+
+      expect(teams).toEqual([]);
+    });
+
+    it('should return empty array if no teams in database', async () => {
+      (matchRepository.getAllTeams as jest.Mock).mockResolvedValue([]);
+
+      const teams = await service.getAvailableTeams();
+
+      expect(teams).toEqual([]);
     });
   });
 
   describe('canPlacePrediction', () => {
+    beforeEach(() => {
+      (leagueRepository.findActiveByConfiguredLeagues as jest.Mock).mockResolvedValue([
+        { id: 1, code: 'WC', name: 'World Cup' },
+      ]);
+    });
+
     it('should allow prediction before first match', async () => {
       const futureMatch = {
         id: 1,
         match_date: new Date(Date.now() + 86400000), // Tomorrow
       };
 
-      (matchRepository.getFirstMatch as jest.Mock).mockResolvedValue(futureMatch);
+      (matchRepository.getFirstMatchByLeague as jest.Mock).mockResolvedValue(futureMatch);
 
       const result = await service.canPlacePrediction();
 
@@ -70,7 +102,7 @@ describe('TournamentPredictionService', () => {
         match_date: new Date(Date.now() - 3600000), // 1 hour ago
       };
 
-      (matchRepository.getFirstMatch as jest.Mock).mockResolvedValue(pastMatch);
+      (matchRepository.getFirstMatchByLeague as jest.Mock).mockResolvedValue(pastMatch);
 
       const result = await service.canPlacePrediction();
 
@@ -79,21 +111,48 @@ describe('TournamentPredictionService', () => {
     });
 
     it('should allow prediction if no matches exist', async () => {
-      (matchRepository.getFirstMatch as jest.Mock).mockResolvedValue(null);
+      (matchRepository.getFirstMatchByLeague as jest.Mock).mockResolvedValue(null);
 
       const result = await service.canPlacePrediction();
 
       expect(result.allowed).toBe(true);
     });
+
+    it('should reject if no active league found', async () => {
+      (leagueRepository.findActiveByConfiguredLeagues as jest.Mock).mockResolvedValue([]);
+
+      const result = await service.canPlacePrediction();
+
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('No active league found');
+    });
   });
 
   describe('placePrediction', () => {
     beforeEach(() => {
+      // Mock active league
+      (leagueRepository.findActiveByConfiguredLeagues as jest.Mock).mockResolvedValue([
+        { id: 1, code: 'WC', name: 'World Cup' },
+      ]);
+
       // Mock canPlacePrediction to allow by default
-      (matchRepository.getFirstMatch as jest.Mock).mockResolvedValue({
+      (matchRepository.getFirstMatchByLeague as jest.Mock).mockResolvedValue({
         id: 1,
         match_date: new Date(Date.now() + 86400000),
       });
+
+      // Mock getAvailableTeams to return valid teams
+      const mockTeams = [
+        'Argentina',
+        'Brazil',
+        'England',
+        'France',
+        'Germany',
+        'Italy',
+        'Portugal',
+        'Spain',
+      ];
+      (matchRepository.getAllTeams as jest.Mock).mockResolvedValue(mockTeams);
     });
 
     it('should create new prediction successfully', async () => {
@@ -122,6 +181,7 @@ describe('TournamentPredictionService', () => {
       expect(result.prediction).toBeDefined();
       expect(tournamentPredictionRepository.create).toHaveBeenCalledWith(
         userId,
+        1, // leagueId
         teams.first,
         teams.second,
         teams.third,
@@ -174,7 +234,7 @@ describe('TournamentPredictionService', () => {
     });
 
     it('should reject if tournament has started', async () => {
-      (matchRepository.getFirstMatch as jest.Mock).mockResolvedValue({
+      (matchRepository.getFirstMatchByLeague as jest.Mock).mockResolvedValue({
         id: 1,
         match_date: new Date(Date.now() - 3600000), // Past
       });
@@ -198,6 +258,16 @@ describe('TournamentPredictionService', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Invalid team');
+    });
+
+    it('should reject if no teams available', async () => {
+      (tournamentPredictionRepository.findByUserId as jest.Mock).mockResolvedValue(null);
+      (matchRepository.getAllTeams as jest.Mock).mockResolvedValue([]);
+
+      const result = await service.placePrediction(1, 'Brazil', 'Argentina', 'France', 'Germany');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('No teams available');
     });
 
     it('should validate all four positions have different teams', async () => {
@@ -241,15 +311,15 @@ describe('TournamentPredictionService', () => {
         },
       ];
 
-      (tournamentPredictionRepository.getAll as jest.Mock).mockResolvedValue(predictions);
+      (tournamentPredictionRepository.getAllByLeague as jest.Mock).mockResolvedValue(predictions);
 
-      await service.scorePredictions('Argentina', 'France', 'Croatia', 'Morocco');
+      await service.scorePredictions(1, 'Argentina', 'France', 'Croatia', 'Morocco');
 
       // First user: all correct = 28 points
-      expect(tournamentPredictionRepository.updateBonusPoints).toHaveBeenCalledWith(1, 28);
+      expect(tournamentPredictionRepository.updateBonusPoints).toHaveBeenCalledWith(1, 1, 28);
 
       // Second user: wrong order = 0 points
-      expect(tournamentPredictionRepository.updateBonusPoints).toHaveBeenCalledWith(2, 0);
+      expect(tournamentPredictionRepository.updateBonusPoints).toHaveBeenCalledWith(2, 1, 0);
     });
 
     it('should give 7 points for each correct position', async () => {
@@ -265,12 +335,12 @@ describe('TournamentPredictionService', () => {
         },
       ];
 
-      (tournamentPredictionRepository.getAll as jest.Mock).mockResolvedValue(predictions);
+      (tournamentPredictionRepository.getAllByLeague as jest.Mock).mockResolvedValue(predictions);
 
-      await service.scorePredictions('Argentina', 'France', 'Croatia', 'Morocco');
+      await service.scorePredictions(1, 'Argentina', 'France', 'Croatia', 'Morocco');
 
       // 2 correct positions = 14 points
-      expect(tournamentPredictionRepository.updateBonusPoints).toHaveBeenCalledWith(1, 14);
+      expect(tournamentPredictionRepository.updateBonusPoints).toHaveBeenCalledWith(1, 1, 14);
     });
 
     it('should skip already scored predictions', async () => {
@@ -286,9 +356,9 @@ describe('TournamentPredictionService', () => {
         },
       ];
 
-      (tournamentPredictionRepository.getAll as jest.Mock).mockResolvedValue(predictions);
+      (tournamentPredictionRepository.getAllByLeague as jest.Mock).mockResolvedValue(predictions);
 
-      await service.scorePredictions('Argentina', 'France', 'Croatia', 'Morocco');
+      await service.scorePredictions(1, 'Argentina', 'France', 'Croatia', 'Morocco');
 
       expect(tournamentPredictionRepository.updateBonusPoints).not.toHaveBeenCalled();
     });
@@ -306,11 +376,11 @@ describe('TournamentPredictionService', () => {
         },
       ];
 
-      (tournamentPredictionRepository.getAll as jest.Mock).mockResolvedValue(predictions);
+      (tournamentPredictionRepository.getAllByLeague as jest.Mock).mockResolvedValue(predictions);
 
-      await service.scorePredictions('Argentina', 'France', 'Croatia', 'Morocco');
+      await service.scorePredictions(1, 'Argentina', 'France', 'Croatia', 'Morocco');
 
-      expect(tournamentPredictionRepository.updateBonusPoints).toHaveBeenCalledWith(1, 0);
+      expect(tournamentPredictionRepository.updateBonusPoints).toHaveBeenCalledWith(1, 1, 0);
     });
   });
 

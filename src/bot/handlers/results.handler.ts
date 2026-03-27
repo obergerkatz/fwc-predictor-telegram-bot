@@ -7,7 +7,7 @@ import { formatTeamWithFlag } from '../../utils/flags';
 
 export async function handleResults(ctx: Context): Promise<void> {
   try {
-    const matches = await matchService.getFinishedAndLiveMatches(30);
+    const matches = await matchService.getFinishedAndLiveMatches();
 
     if (matches.length === 0) {
       await ctx.reply(

@@ -1,7 +1,7 @@
 {
-  "name": "fwc-predictor-telegram-bot",
+  "name": "football-predictor-bot",
   "version": "1.0.0",
-  "description": "FIFA World Cup prediction bot with Telegram integration",
+  "description": "Football match prediction bot with Telegram integration",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",

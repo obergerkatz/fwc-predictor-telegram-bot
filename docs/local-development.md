@@ -45,8 +45,8 @@ This uses `pnpm-lock.yaml` to ensure reproducible builds with pinned dependencie
 
 ```bash
 docker run -d \
-  --name fwc-predictor-db \
-  -e POSTGRES_DB=fwc_predictor \
+  --name football-predictor-db \
+  -e POSTGRES_DB=football_predictor \
   -e POSTGRES_USER=postgres \
   -e POSTGRES_PASSWORD=postgres \
   -p 5432:5432 \
@@ -61,7 +61,7 @@ brew install postgresql@18
 brew services start postgresql@18
 
 # Create database
-createdb fwc_predictor
+createdb football_predictor
 ```
 
 ## 4. Configure Environment
@@ -83,7 +83,7 @@ API_FOOTBALL_BASE_URL=https://api.football-data.org/v4
 # Database
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=fwc_predictor
+DB_NAME=football_predictor
 DB_USER=postgres
 DB_PASSWORD=postgres
 
@@ -96,7 +96,7 @@ FIXTURE_SYNC_CRON=0 */6 * * *
 MATCH_UPDATE_CRON=*/5 * * * *
 SCORING_CRON=*/10 * * * *
 
-# Competition (World Cup)
+# Competition
 DEFAULT_LEAGUE_IDS=WC
 DEFAULT_SEASON=2022
 

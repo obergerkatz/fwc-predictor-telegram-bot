@@ -231,7 +231,7 @@ describe('FootballDataClient', () => {
     it('should fetch competition info', async () => {
       const mockCompetition = {
         id: 2000,
-        name: 'FIFA World Cup',
+        name: 'World Cup',
         code: 'WC',
       };
 

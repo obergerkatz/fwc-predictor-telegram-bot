@@ -155,7 +155,7 @@ export class MatchRepository {
     return result.rows;
   }
 
-  async findFinishedAndLive(limit: number = 20): Promise<MatchWithLeague[]> {
+  async findFinishedAndLive(): Promise<MatchWithLeague[]> {
     const leagueCodes = config.leagues.defaultLeagueIds;
     const result = await db.query<MatchWithLeagueRow>(
       `SELECT m.*,
@@ -168,9 +168,8 @@ export class MatchRepository {
          AND l.code = ANY($3::text[])
        ORDER BY
          CASE WHEN m.status = $1 THEN 0 ELSE 1 END,
-         m.match_date DESC
-       LIMIT $4`,
-      [MatchStatus.LIVE, MatchStatus.FINISHED, leagueCodes, limit]
+         m.match_date ASC`,
+      [MatchStatus.LIVE, MatchStatus.FINISHED, leagueCodes]
     );
 
     return result.rows.map((row) => this.mapRowWithLeague(row));
@@ -179,6 +178,26 @@ export class MatchRepository {
   async getFirstMatch(): Promise<Match | null> {
     const result = await db.query<Match>('SELECT * FROM matches ORDER BY match_date ASC LIMIT 1');
     return result.rows[0] || null;
+  }
+
+  async getFirstMatchByLeague(leagueId: number): Promise<Match | null> {
+    const result = await db.query<Match>(
+      'SELECT * FROM matches WHERE league_id = $1 ORDER BY match_date ASC LIMIT 1',
+      [leagueId]
+    );
+    return result.rows[0] || null;
+  }
+
+  async getAllTeams(): Promise<string[]> {
+    const result = await db.query<{ team_name: string }>(
+      `SELECT DISTINCT team_name FROM (
+        SELECT home_team as team_name FROM matches
+        UNION
+        SELECT away_team as team_name FROM matches
+      ) AS teams
+      ORDER BY team_name ASC`
+    );
+    return result.rows.map((row) => row.team_name);
   }
 
   private mapRowWithLeague(row: MatchWithLeagueRow): MatchWithLeague {

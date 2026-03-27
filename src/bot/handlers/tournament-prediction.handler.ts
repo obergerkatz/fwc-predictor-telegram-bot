@@ -98,7 +98,7 @@ export async function handleTournamentPrediction(ctx: Context): Promise<void> {
     }
 
     // Start new prediction flow
-    const teams = tournamentPredictionService.getAvailableTeams();
+    const teams = await tournamentPredictionService.getAvailableTeams();
 
     // Create session
     tpSessions.set(ctx.from.id, {
@@ -146,7 +146,7 @@ export async function handleTeamSelection(ctx: Context): Promise<void> {
       return;
     }
 
-    const teams = tournamentPredictionService.getAvailableTeams();
+    const teams = await tournamentPredictionService.getAvailableTeams();
 
     // Update session
     session[position] = teamName;
@@ -338,7 +338,7 @@ export async function handleTournamentPredictionStart(ctx: Context): Promise<voi
     session.fourth = undefined;
     session.timestamp = Date.now();
 
-    const teams = tournamentPredictionService.getAvailableTeams();
+    const teams = await tournamentPredictionService.getAvailableTeams();
 
     await ctx.answerCbQuery();
     await ctx.editMessageText(
@@ -406,7 +406,7 @@ export async function handleTournamentPredictionModify(ctx: Context): Promise<vo
       return;
     }
 
-    const teams = tournamentPredictionService.getAvailableTeams();
+    const teams = await tournamentPredictionService.getAvailableTeams();
 
     // Check if modifying all or single position
     if (callbackData === 'tp_modify_all') {

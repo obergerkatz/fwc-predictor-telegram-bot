@@ -17,7 +17,7 @@ export async function handleStart(ctx: Context): Promise<void> {
     await userService.getOrCreateUser(telegramId, username, firstName);
 
     const welcomeMessage =
-      `⚽ FIFA WORLD CUP PREDICTOR\n` +
+      `⚽ FOOTBALL PREDICTOR\n` +
       `━━━━━━━━━━━━━━━━━━━━\n\n` +
       `Welcome ${firstName}! 👋\n\n` +
       `Predict match scores and compete\n` +
@@ -34,8 +34,9 @@ export async function handleStart(ctx: Context): Promise<void> {
       `4pts • Correct goal difference\n` +
       `3pts • One side + result\n` +
       `1pt  • One side only\n\n` +
-      `🏅 Don't forget to predict the\n` +
-      `   tournament top 4 for bonus points!\n\n` +
+      `🏅 Don't forget to predict\n` +
+      `   group qualifiers and top 4\n` +
+      `   for bonus points!\n\n` +
       `⚠️ Bet only BEFORE kickoff!\n\n` +
       `Good luck! 🍀\n` +
       `━━━━━━━━━━━━━━━━━━━━`;

@@ -1,56 +1,41 @@
-import { tournamentPredictionRepository, matchRepository } from '../db/repositories';
+import {
+  tournamentPredictionRepository,
+  matchRepository,
+  leagueRepository,
+} from '../db/repositories';
 import { TournamentPrediction } from '../types';
 import { logger } from '../utils/logger';
 
 export class TournamentPredictionService {
-  // List of World Cup 2026 qualified teams (this would ideally come from API)
-  private readonly worldCupTeams = [
-    'Argentina',
-    'Brazil',
-    'France',
-    'England',
-    'Spain',
-    'Germany',
-    'Portugal',
-    'Netherlands',
-    'Belgium',
-    'Italy',
-    'Croatia',
-    'Uruguay',
-    'Colombia',
-    'Mexico',
-    'USA',
-    'Canada',
-    'Morocco',
-    'Senegal',
-    'Japan',
-    'South Korea',
-    'Australia',
-    'Switzerland',
-    'Denmark',
-    'Poland',
-    'Ukraine',
-    'Wales',
-    'Ecuador',
-    'Peru',
-    'Chile',
-    'Ghana',
-    'Cameroon',
-    'Tunisia',
-    'Saudi Arabia',
-    'Iran',
-    'Qatar',
-    'Costa Rica',
-  ].sort();
-
-  getAvailableTeams(): string[] {
-    return this.worldCupTeams;
+  private async getActiveLeagueId(): Promise<number | null> {
+    const activeLeagues = await leagueRepository.findActiveByConfiguredLeagues();
+    if (activeLeagues.length === 0) {
+      logger.warn('No active leagues found matching DEFAULT_LEAGUE_IDS');
+      return null;
+    }
+    return activeLeagues[0].id;
+  }
+  async getAvailableTeams(): Promise<string[]> {
+    try {
+      const teams = await matchRepository.getAllTeams();
+      logger.debug('Fetched teams from database', { count: teams.length });
+      return teams;
+    } catch (error) {
+      logger.error('Failed to get available teams from database', { error });
+      return [];
+    }
   }
 
   async canPlacePrediction(): Promise<{ allowed: boolean; reason?: string }> {
     try {
-      // Check if any match has started
-      const firstMatch = await matchRepository.getFirstMatch();
+      // Get active league
+      const leagueId = await this.getActiveLeagueId();
+      if (!leagueId) {
+        return { allowed: false, reason: 'No active league found' };
+      }
+
+      // Check if any match in the active league has started
+      const firstMatch = await matchRepository.getFirstMatchByLeague(leagueId);
 
       if (!firstMatch) {
         return { allowed: true };
@@ -74,7 +59,9 @@ export class TournamentPredictionService {
   }
 
   async getUserPrediction(userId: number): Promise<TournamentPrediction | null> {
-    return tournamentPredictionRepository.findByUserId(userId);
+    const leagueId = await this.getActiveLeagueId();
+    if (!leagueId) return null;
+    return tournamentPredictionRepository.findByUserId(userId, leagueId);
   }
 
   async placePrediction(
@@ -99,36 +86,49 @@ export class TournamentPredictionService {
       }
 
       // Validate all teams are valid
+      const availableTeams = await this.getAvailableTeams();
+      if (availableTeams.length === 0) {
+        return { success: false, error: 'No teams available for prediction' };
+      }
+
       for (const team of teams) {
-        if (!this.worldCupTeams.includes(team)) {
+        if (!availableTeams.includes(team)) {
           return { success: false, error: `Invalid team: ${team}` };
         }
       }
 
+      // Get active league
+      const leagueId = await this.getActiveLeagueId();
+      if (!leagueId) {
+        return { success: false, error: 'No active league found' };
+      }
+
       // Check if user already has a prediction
-      const existing = await tournamentPredictionRepository.findByUserId(userId);
+      const existing = await tournamentPredictionRepository.findByUserId(userId, leagueId);
 
       let prediction: TournamentPrediction;
       if (existing) {
         // Update existing prediction
         prediction = await tournamentPredictionRepository.update(
           userId,
+          leagueId,
           firstPlace,
           secondPlace,
           thirdPlace,
           fourthPlace
         );
-        logger.info('Tournament prediction updated', { userId });
+        logger.info('Tournament prediction updated', { userId, leagueId });
       } else {
         // Create new prediction
         prediction = await tournamentPredictionRepository.create(
           userId,
+          leagueId,
           firstPlace,
           secondPlace,
           thirdPlace,
           fourthPlace
         );
-        logger.info('Tournament prediction created', { userId });
+        logger.info('Tournament prediction created', { userId, leagueId });
       }
 
       return { success: true, prediction };
@@ -139,13 +139,14 @@ export class TournamentPredictionService {
   }
 
   async scorePredictions(
+    leagueId: number,
     actualFirstPlace: string,
     actualSecondPlace: string,
     actualThirdPlace: string,
     actualFourthPlace: string
   ): Promise<void> {
     try {
-      const predictions = await tournamentPredictionRepository.getAll();
+      const predictions = await tournamentPredictionRepository.getAllByLeague(leagueId);
 
       for (const prediction of predictions) {
         if (prediction.is_scored) continue;
@@ -157,15 +158,20 @@ export class TournamentPredictionService {
         if (prediction.third_place === actualThirdPlace) bonusPoints += 7;
         if (prediction.fourth_place === actualFourthPlace) bonusPoints += 7;
 
-        await tournamentPredictionRepository.updateBonusPoints(prediction.user_id, bonusPoints);
+        await tournamentPredictionRepository.updateBonusPoints(
+          prediction.user_id,
+          leagueId,
+          bonusPoints
+        );
 
         logger.info('Tournament prediction scored', {
           userId: prediction.user_id,
+          leagueId,
           bonusPoints,
         });
       }
     } catch (error) {
-      logger.error('Failed to score tournament predictions', { error });
+      logger.error('Failed to score tournament predictions', { error, leagueId });
       throw error;
     }
   }

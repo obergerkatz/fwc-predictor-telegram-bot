@@ -6,7 +6,7 @@ import { jobScheduler } from './jobs/scheduler';
 
 async function bootstrap() {
   try {
-    logger.info('Starting FIFA World Cup Predictor Bot');
+    logger.info('Starting Football Predictor Bot');
 
     // Test database connection
     logger.info('Testing database connection...');
@@ -27,7 +27,7 @@ async function bootstrap() {
     logger.info('Starting job scheduler...');
     jobScheduler.start();
 
-    logger.info('FIFA World Cup Predictor Bot is running! 🚀');
+    logger.info('Football Predictor Bot is running! 🚀');
   } catch (error) {
     logger.error('Failed to start application', { error });
     process.exit(1);
