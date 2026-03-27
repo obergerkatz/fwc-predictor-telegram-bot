@@ -72,6 +72,11 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Run tests
         run: pnpm run test
+        env:
+          TELEGRAM_BOT_TOKEN: test_token_for_ci
+          API_FOOTBALL_KEY: test_key_for_ci
+          API_FOOTBALL_BASE_URL: https://api.football-data.org/v4
+          DB_PASSWORD: test_password
       # -----------------------------------------------------------------------
       # TypeScript: Build
       # -----------------------------------------------------------------------
