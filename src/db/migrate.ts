@@ -21,6 +21,7 @@ async function runMigrations() {
       '002_tournament_predictions.sql',
       '007_create_group_stage_predictions.sql',
       '008_expand_group_stage_to_12_groups.sql',
+      '009_add_league_code.sql',
     ];
 
     for (const migrationFile of migrations) {

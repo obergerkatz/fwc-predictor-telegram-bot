@@ -11,6 +11,7 @@ export interface User {
 export interface League {
   id: number;
   api_league_id: number;
+  code: string | null;
   name: string;
   country: string;
   season: number;

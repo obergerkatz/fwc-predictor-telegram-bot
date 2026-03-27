@@ -39,6 +39,7 @@ export class FixtureSyncJob {
             competition.name,
             competition.area.name,
             competition.currentSeason.id,
+            competition.code,
             competition.emblem
           );
 

@@ -1,9 +1,11 @@
 import { db } from '../database';
 import { Match, MatchStatus, MatchWithLeague } from '../../types';
+import { config } from '../../utils/config';
 
 interface MatchWithLeagueRow extends Match {
   league_id: number;
   api_league_id: number;
+  league_code: string | null;
   league_name: string;
   league_country: string;
   league_season: number;
@@ -20,7 +22,7 @@ export class MatchRepository {
   async findByIdWithLeague(id: number): Promise<MatchWithLeague | null> {
     const result = await db.query<MatchWithLeagueRow>(
       `SELECT m.*,
-              l.id as league_id, l.api_league_id, l.name as league_name,
+              l.id as league_id, l.api_league_id, l.code as league_code, l.name as league_name,
               l.country as league_country, l.season as league_season,
               l.is_active as league_is_active, l.logo_url as league_logo_url
        FROM matches m
@@ -80,32 +82,36 @@ export class MatchRepository {
   }
 
   async findUpcoming(): Promise<MatchWithLeague[]> {
+    const leagueCodes = config.leagues.defaultLeagueIds;
     const result = await db.query<MatchWithLeagueRow>(
       `SELECT m.*,
-              l.id as league_id, l.api_league_id, l.name as league_name,
+              l.id as league_id, l.api_league_id, l.code as league_code, l.name as league_name,
               l.country as league_country, l.season as league_season,
               l.is_active as league_is_active, l.logo_url as league_logo_url
        FROM matches m
        JOIN leagues l ON m.league_id = l.id
        WHERE m.status = $1 AND m.match_date > CURRENT_TIMESTAMP
+         AND l.code = ANY($2::text[])
        ORDER BY m.match_date ASC`,
-      [MatchStatus.SCHEDULED]
+      [MatchStatus.SCHEDULED, leagueCodes]
     );
 
     return result.rows.map((row) => this.mapRowWithLeague(row));
   }
 
   async findToday(): Promise<MatchWithLeague[]> {
+    const leagueCodes = config.leagues.defaultLeagueIds;
     const result = await db.query<MatchWithLeagueRow>(
       `SELECT m.*,
-              l.id as league_id, l.api_league_id, l.name as league_name,
+              l.id as league_id, l.api_league_id, l.code as league_code, l.name as league_name,
               l.country as league_country, l.season as league_season,
               l.is_active as league_is_active, l.logo_url as league_logo_url
        FROM matches m
        JOIN leagues l ON m.league_id = l.id
        WHERE DATE(m.match_date) = CURRENT_DATE
+         AND l.code = ANY($1::text[])
        ORDER BY m.match_date ASC`,
-      []
+      [leagueCodes]
     );
 
     return result.rows.map((row) => this.mapRowWithLeague(row));
@@ -120,17 +126,19 @@ export class MatchRepository {
   }
 
   async findRecentFinished(limit: number = 10): Promise<MatchWithLeague[]> {
+    const leagueCodes = config.leagues.defaultLeagueIds;
     const result = await db.query<MatchWithLeagueRow>(
       `SELECT m.*,
-              l.id as league_id, l.api_league_id, l.name as league_name,
+              l.id as league_id, l.api_league_id, l.code as league_code, l.name as league_name,
               l.country as league_country, l.season as league_season,
               l.is_active as league_is_active, l.logo_url as league_logo_url
        FROM matches m
        JOIN leagues l ON m.league_id = l.id
        WHERE m.status = $1
+         AND l.code = ANY($2::text[])
        ORDER BY m.match_date DESC
-       LIMIT $2`,
-      [MatchStatus.FINISHED, limit]
+       LIMIT $3`,
+      [MatchStatus.FINISHED, leagueCodes, limit]
     );
 
     return result.rows.map((row) => this.mapRowWithLeague(row));
@@ -148,19 +156,21 @@ export class MatchRepository {
   }
 
   async findFinishedAndLive(limit: number = 20): Promise<MatchWithLeague[]> {
+    const leagueCodes = config.leagues.defaultLeagueIds;
     const result = await db.query<MatchWithLeagueRow>(
       `SELECT m.*,
-              l.id as league_id, l.api_league_id, l.name as league_name,
+              l.id as league_id, l.api_league_id, l.code as league_code, l.name as league_name,
               l.country as league_country, l.season as league_season,
               l.is_active as league_is_active, l.logo_url as league_logo_url
        FROM matches m
        JOIN leagues l ON m.league_id = l.id
        WHERE m.status IN ($1, $2)
+         AND l.code = ANY($3::text[])
        ORDER BY
          CASE WHEN m.status = $1 THEN 0 ELSE 1 END,
          m.match_date DESC
-       LIMIT $3`,
-      [MatchStatus.LIVE, MatchStatus.FINISHED, limit]
+       LIMIT $4`,
+      [MatchStatus.LIVE, MatchStatus.FINISHED, leagueCodes, limit]
     );
 
     return result.rows.map((row) => this.mapRowWithLeague(row));
@@ -188,6 +198,7 @@ export class MatchRepository {
       league: {
         id: row.league_id,
         api_league_id: row.api_league_id,
+        code: row.league_code,
         name: row.league_name,
         country: row.league_country,
         season: row.league_season,
