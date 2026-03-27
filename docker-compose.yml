@@ -1,0 +1,60 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: fwc-predictor-db
+    environment:
+      POSTGRES_DB: ${DB_NAME:-fwc_predictor}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: fwc-predictor-bot
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Telegram
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+
+      # API-Football
+      API_FOOTBALL_KEY: ${API_FOOTBALL_KEY}
+      API_FOOTBALL_BASE_URL: ${API_FOOTBALL_BASE_URL}
+
+      # Database
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-fwc_predictor}
+      DB_USER: ${DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+
+      # App
+      NODE_ENV: ${NODE_ENV:-production}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+
+      # Jobs
+      FIXTURE_SYNC_CRON: ${FIXTURE_SYNC_CRON:-0 */6 * * *}
+      MATCH_UPDATE_CRON: ${MATCH_UPDATE_CRON:-*/5 * * * *}
+      SCORING_CRON: ${SCORING_CRON:-*/10 * * * *}
+
+      # Leagues
+      DEFAULT_LEAGUE_IDS: ${DEFAULT_LEAGUE_IDS:-39,140,78,61,135}
+      DEFAULT_SEASON: ${DEFAULT_SEASON:-2024}
+
+      # Admin
+      ADMIN_TELEGRAM_IDS: ${ADMIN_TELEGRAM_IDS:-}
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

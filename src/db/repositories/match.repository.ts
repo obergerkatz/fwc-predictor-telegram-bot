@@ -1,0 +1,201 @@
+import { db } from '../database';
+import { Match, MatchStatus, MatchWithLeague } from '../../types';
+
+interface MatchWithLeagueRow extends Match {
+  league_id: number;
+  api_league_id: number;
+  league_name: string;
+  league_country: string;
+  league_season: number;
+  league_is_active: boolean;
+  league_logo_url: string | null;
+}
+
+export class MatchRepository {
+  async findById(id: number): Promise<Match | null> {
+    const result = await db.query<Match>('SELECT * FROM matches WHERE id = $1', [id]);
+    return result.rows[0] || null;
+  }
+
+  async findByIdWithLeague(id: number): Promise<MatchWithLeague | null> {
+    const result = await db.query<MatchWithLeagueRow>(
+      `SELECT m.*,
+              l.id as league_id, l.api_league_id, l.name as league_name,
+              l.country as league_country, l.season as league_season,
+              l.is_active as league_is_active, l.logo_url as league_logo_url
+       FROM matches m
+       JOIN leagues l ON m.league_id = l.id
+       WHERE m.id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) return null;
+
+    const row = result.rows[0];
+    return this.mapRowWithLeague(row);
+  }
+
+  async upsert(
+    apiFixtureId: number,
+    leagueId: number,
+    homeTeam: string,
+    awayTeam: string,
+    matchDate: Date,
+    status: MatchStatus,
+    homeScore?: number | null,
+    awayScore?: number | null,
+    homeScoreFt?: number | null,
+    awayScoreFt?: number | null
+  ): Promise<Match> {
+    const result = await db.query<Match>(
+      `INSERT INTO matches (api_fixture_id, league_id, home_team, away_team, match_date, status,
+                            home_score, away_score, home_score_ft, away_score_ft, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)
+       ON CONFLICT (api_fixture_id) DO UPDATE
+       SET league_id = EXCLUDED.league_id,
+           home_team = EXCLUDED.home_team,
+           away_team = EXCLUDED.away_team,
+           match_date = EXCLUDED.match_date,
+           status = EXCLUDED.status,
+           home_score = EXCLUDED.home_score,
+           away_score = EXCLUDED.away_score,
+           home_score_ft = EXCLUDED.home_score_ft,
+           away_score_ft = EXCLUDED.away_score_ft,
+           updated_at = CURRENT_TIMESTAMP
+       RETURNING *`,
+      [
+        apiFixtureId,
+        leagueId,
+        homeTeam,
+        awayTeam,
+        matchDate,
+        status,
+        homeScore,
+        awayScore,
+        homeScoreFt,
+        awayScoreFt,
+      ]
+    );
+    return result.rows[0];
+  }
+
+  async findUpcoming(): Promise<MatchWithLeague[]> {
+    const result = await db.query<MatchWithLeagueRow>(
+      `SELECT m.*,
+              l.id as league_id, l.api_league_id, l.name as league_name,
+              l.country as league_country, l.season as league_season,
+              l.is_active as league_is_active, l.logo_url as league_logo_url
+       FROM matches m
+       JOIN leagues l ON m.league_id = l.id
+       WHERE m.status = $1 AND m.match_date > CURRENT_TIMESTAMP
+       ORDER BY m.match_date ASC`,
+      [MatchStatus.SCHEDULED]
+    );
+
+    return result.rows.map((row) => this.mapRowWithLeague(row));
+  }
+
+  async findToday(): Promise<MatchWithLeague[]> {
+    const result = await db.query<MatchWithLeagueRow>(
+      `SELECT m.*,
+              l.id as league_id, l.api_league_id, l.name as league_name,
+              l.country as league_country, l.season as league_season,
+              l.is_active as league_is_active, l.logo_url as league_logo_url
+       FROM matches m
+       JOIN leagues l ON m.league_id = l.id
+       WHERE DATE(m.match_date) = CURRENT_DATE
+       ORDER BY m.match_date ASC`,
+      []
+    );
+
+    return result.rows.map((row) => this.mapRowWithLeague(row));
+  }
+
+  async findByStatus(status: MatchStatus): Promise<Match[]> {
+    const result = await db.query<Match>(
+      'SELECT * FROM matches WHERE status = $1 ORDER BY match_date ASC',
+      [status]
+    );
+    return result.rows;
+  }
+
+  async findRecentFinished(limit: number = 10): Promise<MatchWithLeague[]> {
+    const result = await db.query<MatchWithLeagueRow>(
+      `SELECT m.*,
+              l.id as league_id, l.api_league_id, l.name as league_name,
+              l.country as league_country, l.season as league_season,
+              l.is_active as league_is_active, l.logo_url as league_logo_url
+       FROM matches m
+       JOIN leagues l ON m.league_id = l.id
+       WHERE m.status = $1
+       ORDER BY m.match_date DESC
+       LIMIT $2`,
+      [MatchStatus.FINISHED, limit]
+    );
+
+    return result.rows.map((row) => this.mapRowWithLeague(row));
+  }
+
+  async findLiveAndRecent(): Promise<Match[]> {
+    const result = await db.query<Match>(
+      `SELECT * FROM matches
+       WHERE status IN ($1, $2)
+          OR (status = $3 AND match_date > CURRENT_TIMESTAMP - INTERVAL '2 hours')
+       ORDER BY match_date ASC`,
+      [MatchStatus.LIVE, MatchStatus.SCHEDULED, MatchStatus.FINISHED]
+    );
+    return result.rows;
+  }
+
+  async findFinishedAndLive(limit: number = 20): Promise<MatchWithLeague[]> {
+    const result = await db.query<MatchWithLeagueRow>(
+      `SELECT m.*,
+              l.id as league_id, l.api_league_id, l.name as league_name,
+              l.country as league_country, l.season as league_season,
+              l.is_active as league_is_active, l.logo_url as league_logo_url
+       FROM matches m
+       JOIN leagues l ON m.league_id = l.id
+       WHERE m.status IN ($1, $2)
+       ORDER BY
+         CASE WHEN m.status = $1 THEN 0 ELSE 1 END,
+         m.match_date DESC
+       LIMIT $3`,
+      [MatchStatus.LIVE, MatchStatus.FINISHED, limit]
+    );
+
+    return result.rows.map((row) => this.mapRowWithLeague(row));
+  }
+
+  async getFirstMatch(): Promise<Match | null> {
+    const result = await db.query<Match>('SELECT * FROM matches ORDER BY match_date ASC LIMIT 1');
+    return result.rows[0] || null;
+  }
+
+  private mapRowWithLeague(row: MatchWithLeagueRow): MatchWithLeague {
+    return {
+      id: row.id,
+      api_fixture_id: row.api_fixture_id,
+      league_id: row.league_id,
+      home_team: row.home_team,
+      away_team: row.away_team,
+      match_date: row.match_date,
+      status: row.status,
+      home_score: row.home_score,
+      away_score: row.away_score,
+      home_score_ft: row.home_score_ft,
+      away_score_ft: row.away_score_ft,
+      updated_at: row.updated_at,
+      league: {
+        id: row.league_id,
+        api_league_id: row.api_league_id,
+        name: row.league_name,
+        country: row.league_country,
+        season: row.league_season,
+        is_active: row.league_is_active,
+        logo_url: row.league_logo_url,
+      },
+    };
+  }
+}
+
+export const matchRepository = new MatchRepository();

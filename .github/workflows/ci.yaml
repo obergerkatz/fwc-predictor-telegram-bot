@@ -1,0 +1,100 @@
+---
+name: CI
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+defaults:
+  run:
+    shell: bash
+permissions:
+  contents: read # Read-only access to repository contents
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  # ===========================================================================
+  # CI Checks (Lint -> Format -> Test -> Build)
+  # ===========================================================================
+  ci:
+    name: CI Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # -----------------------------------------------------------------------
+      # Git: Checkout Repository
+      # -----------------------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      # -----------------------------------------------------------------------
+      # Package Manager: Setup pnpm
+      # -----------------------------------------------------------------------
+      - name: Setup pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 9.15.4
+      # -----------------------------------------------------------------------
+      # Node.js: Setup Environment
+      # -----------------------------------------------------------------------
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      # -----------------------------------------------------------------------
+      # Node.js: Install Dependencies
+      # -----------------------------------------------------------------------
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      # -----------------------------------------------------------------------
+      # ESLint: Run Linter
+      # -----------------------------------------------------------------------
+      - name: Run ESLint
+        run: pnpm run lint
+      # -----------------------------------------------------------------------
+      # Prettier: Check Formatting
+      # -----------------------------------------------------------------------
+      - name: Check formatting
+        run: pnpm exec prettier --check "src/**/*.ts"
+      # -----------------------------------------------------------------------
+      # TypeScript: Type Check
+      # -----------------------------------------------------------------------
+      - name: Type check
+        run: pnpm run typecheck
+      # -----------------------------------------------------------------------
+      # Jest: Run Tests
+      # -----------------------------------------------------------------------
+      - name: Run tests
+        run: pnpm run test
+      # -----------------------------------------------------------------------
+      # TypeScript: Build
+      # -----------------------------------------------------------------------
+      - name: Build
+        run: pnpm run build
+  # ===========================================================================
+  # Final Status Check (Required for branch protection) (always runs)
+  # ===========================================================================
+  all-checks:
+    name: All Checks Passed
+    if: always()
+    needs:
+      - ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # -----------------------------------------------------------------------
+      # Validation: Check All Job Results
+      # -----------------------------------------------------------------------
+      - name: Check all job results
+        run: |
+          if [[ "${{ needs.ci.result }}" != "success" ]]; then
+            echo "CI checks failed or were cancelled"
+            exit 1
+          fi
+          echo "All checks passed successfully!"
