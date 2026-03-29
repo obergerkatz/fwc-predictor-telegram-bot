@@ -92,6 +92,7 @@ export async function handleBetCallback(ctx: Context): Promise<void> {
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      timeZone: 'Asia/Jerusalem',
     });
 
     // Check if user already has a bet
@@ -196,6 +197,7 @@ ${match.league.name}
           day: 'numeric',
           hour: '2-digit',
           minute: '2-digit',
+          timeZone: 'Asia/Jerusalem',
         })}`,
         { reply_markup: createBetConfirmationKeyboard(matchId, homeScore, score) }
       );
@@ -520,6 +522,7 @@ ${match.league.name}
           day: 'numeric',
           hour: '2-digit',
           minute: '2-digit',
+          timeZone: 'Asia/Jerusalem',
         })}`,
         { reply_markup: createBetConfirmationKeyboard(matchId, homeScore, score) }
       );

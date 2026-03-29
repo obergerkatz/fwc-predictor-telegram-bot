@@ -39,6 +39,7 @@ export function createMatchListKeyboard(matches: MatchWithLeague[]): InlineKeybo
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      timeZone: 'Asia/Jerusalem',
     });
 
     return [
@@ -57,6 +58,7 @@ export function createCompletedMatchListKeyboard(matches: MatchWithLeague[]): In
     const dateStr = new Date(match.match_date).toLocaleString('en-US', {
       month: 'short',
       day: 'numeric',
+      timeZone: 'Asia/Jerusalem',
     });
 
     const scoreText =

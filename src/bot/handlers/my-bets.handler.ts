@@ -149,6 +149,7 @@ export async function handleMyBets(ctx: Context): Promise<void> {
           day: 'numeric',
           hour: '2-digit',
           minute: '2-digit',
+          timeZone: 'Asia/Jerusalem',
         });
         message += `⚽ ${formatTeamWithFlag(bet.match.home_team)} vs ${formatTeamWithFlag(bet.match.away_team)}\n`;
         message += `   🎯 Your bet: ${bet.predicted_home_score}-${bet.predicted_away_score}\n`;
@@ -176,6 +177,7 @@ export async function handleMyBets(ctx: Context): Promise<void> {
           month: 'short',
           day: 'numeric',
           year: 'numeric',
+          timeZone: 'Asia/Jerusalem',
         });
         message += `⚽ ${formatTeamWithFlag(bet.match.home_team)} vs ${formatTeamWithFlag(bet.match.away_team)}\n`;
         message += `   📊 Result: ${bet.match.home_score}-${bet.match.away_score}\n`;
