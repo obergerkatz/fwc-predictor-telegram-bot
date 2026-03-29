@@ -131,6 +131,7 @@ export async function handleResultDetails(ctx: Context): Promise<void> {
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      timeZone: 'Asia/Jerusalem',
     });
 
     let message = `📊 MATCH RESULTS\n`;

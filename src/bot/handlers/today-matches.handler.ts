@@ -41,6 +41,7 @@ export async function handleTodayMatches(ctx: Context): Promise<void> {
         hour: '2-digit',
         minute: '2-digit',
         hour12: false,
+        timeZone: 'Asia/Jerusalem',
       });
 
       // Status emoji
@@ -102,6 +103,7 @@ export async function handleTodayMatches(ctx: Context): Promise<void> {
           hour: '2-digit',
           minute: '2-digit',
           hour12: false,
+          timeZone: 'Asia/Jerusalem',
         });
         return [
           {
